@@ -1,0 +1,82 @@
+{
+  "site_name": "Nautica Shopping Centre",
+  "system_size_kw": 811.87,
+  "installation_details": {
+    "year_1_start_year": 2023,
+    "year_1_generation_kwh": 1174011.05,
+    "commission_date": "2023-01-01",
+    "description": "System commissioned in 2023"
+  },
+  "degradation": {
+    "annual_degradation_rate_percent": 0.55,
+    "description": "Annual performance degradation rate",
+    "notes": "Typical crystalline silicon degradation is 0.5-0.8% per year"
+  },
+  "year_projections": {
+    "description": "Expected generation by year with degradation applied",
+    "calculation": "Year N = Year 1 × (1 - degradation_rate)^(N-1)",
+    "years": {
+      "2023": {
+        "year_number": 1,
+        "degradation_factor": 1.0000,
+        "expected_generation_kwh": 1174011.05
+      },
+      "2024": {
+        "year_number": 2,
+        "degradation_factor": 0.9945,
+        "expected_generation_kwh": 1167554.49
+      },
+      "2025": {
+        "year_number": 3,
+        "degradation_factor": 0.9890,
+        "expected_generation_kwh": 1161133.44
+      },
+      "2026": {
+        "year_number": 4,
+        "degradation_factor": 0.9836,
+        "expected_generation_kwh": 1154747.76
+      },
+      "2027": {
+        "year_number": 5,
+        "degradation_factor": 0.9782,
+        "expected_generation_kwh": 1148397.29
+      },
+      "2028": {
+        "year_number": 6,
+        "degradation_factor": 0.9728,
+        "expected_generation_kwh": 1142081.89
+      },
+      "2029": {
+        "year_number": 7,
+        "degradation_factor": 0.9675,
+        "expected_generation_kwh": 1135801.40
+      },
+      "2030": {
+        "year_number": 8,
+        "degradation_factor": 0.9621,
+        "expected_generation_kwh": 1129555.68
+      },
+      "2031": {
+        "year_number": 9,
+        "degradation_factor": 0.9568,
+        "expected_generation_kwh": 1123344.57
+      },
+      "2032": {
+        "year_number": 10,
+        "degradation_factor": 0.9516,
+        "expected_generation_kwh": 1117167.93
+      }
+    }
+  },
+  "warranty": {
+    "performance_warranty_years": 25,
+    "minimum_performance_year_25": 0.85,
+    "description": "Typical warranty guarantees 85% performance after 25 years"
+  },
+  "notes": [
+    "Edit 'annual_degradation_rate_percent' to adjust degradation rate",
+    "Edit 'year_1_start_year' to change the commissioning year",
+    "Edit 'year_1_generation_kwh' to update the baseline generation",
+    "Year projections will need to be recalculated if baseline values change"
+  ]
+}

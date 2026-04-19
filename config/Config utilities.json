@@ -1,0 +1,89 @@
+import json
+from datetime import datetime
+
+def load_config(filename):
+    """Load a configuration file"""
+    with open(filename, 'r') as f:
+        return json.load(f)
+
+def calculate_year_projection(year, degradation_config):
+    """Calculate expected generation for a given year"""
+    year_1 = degradation_config['installation_details']['year_1_start_year']
+    year_1_gen = degradation_config['installation_details']['year_1_generation_kwh']
+    degradation_rate = degradation_config['degradation']['annual_degradation_rate_percent'] / 100
+    
+    years_elapsed = year - year_1
+    degradation_factor = (1 - degradation_rate) ** years_elapsed
+    expected_generation = year_1_gen * degradation_factor
+    
+    return {
+        'year': year,
+        'year_number': years_elapsed + 1,
+        'degradation_factor': round(degradation_factor, 4),
+        'expected_generation_kwh': round(expected_generation, 2)
+    }
+
+def calculate_environmental_impact(kwh_generated, env_config):
+    """Calculate environmental impact metrics"""
+    emissions = env_config['emissions']
+    fossil = env_config['fossil_fuel_equivalents']
+    trees = env_config['tree_equivalents']
+    homes = env_config['home_equivalents']
+    vehicle = env_config['vehicle_equivalents']
+    water = env_config['water_savings']
+    
+    co2_saved_kg = kwh_generated * emissions['co2_kg_per_kwh']
+    
+    return {
+        'generation_kwh': kwh_generated,
+        'co2_saved': {
+            'kg': round(co2_saved_kg, 2),
+            'tons': round(co2_saved_kg / 1000, 2)
+        },
+        'coal_saved_kg': round(kwh_generated * fossil['coal_kg_per_kwh'], 2),
+        'trees_equivalent': round(co2_saved_kg / trees['co2_kg_absorbed_per_tree_per_year'], 1),
+        'homes_powered_monthly': round(kwh_generated / homes['avg_home_consumption_kwh_per_month'], 1),
+        'distance_km_equivalent': round(kwh_generated * vehicle['km_driven_per_kwh'], 2),
+        'petrol_saved_liters': round(kwh_generated * vehicle['petrol_liters_saved_per_kwh'], 2),
+        'water_saved_liters': round(kwh_generated * water['liters_per_kwh'], 2)
+    }
+
+def get_monthly_prediction(month_name, pvsyst_config):
+    """Get predicted generation for a specific month"""
+    return pvsyst_config['monthly_predictions_kwh'].get(month_name.lower(), 0)
+
+if __name__ == '__main__':
+    # Example usage
+    print("=== Nautica Solar Configuration Utilities ===\n")
+    
+    # Load configs
+    pvsyst = load_config('config_pvsyst.json')
+    degradation = load_config('config_degradation.json')
+    environmental = load_config('config_environmental.json')
+    
+    print("✓ Configuration files loaded successfully\n")
+    
+    # Example 1: Calculate projection for current year
+    current_year = datetime.now().year
+    projection = calculate_year_projection(current_year, degradation)
+    print(f"Year {current_year} Projection:")
+    print(f"  Year Number: {projection['year_number']}")
+    print(f"  Degradation Factor: {projection['degradation_factor']}")
+    print(f"  Expected Generation: {projection['expected_generation_kwh']:,.2f} kWh\n")
+    
+    # Example 2: Calculate environmental impact for Year 1
+    year_1_gen = pvsyst['year_1_total_kwh']
+    impact = calculate_environmental_impact(year_1_gen, environmental)
+    print(f"Year 1 Environmental Impact ({year_1_gen:,.0f} kWh):")
+    print(f"  CO2 Saved: {impact['co2_saved']['tons']:,.2f} tons")
+    print(f"  Coal Saved: {impact['coal_saved_kg']:,.2f} kg")
+    print(f"  Trees Equivalent: {impact['trees_equivalent']:,.0f} trees")
+    print(f"  Homes Powered: {impact['homes_powered_monthly']:,.1f} homes/month")
+    print(f"  Distance Equivalent: {impact['distance_km_equivalent']:,.0f} km")
+    print(f"  Water Saved: {impact['water_saved_liters']:,.0f} liters\n")
+    
+    # Example 3: Get monthly prediction
+    print("Monthly PVSyst Predictions:")
+    for month in ['january', 'february', 'march', 'april', 'may', 'june']:
+        pred = get_monthly_prediction(month, pvsyst)
+        print(f"  {month.capitalize()}: {pred:,.2f} kWh")
