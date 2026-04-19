@@ -19,7 +19,8 @@ PV_BOOST = 1.08
 LOAD_REDUCTION = 0.85
 
 def apply_boost(d):
-    """Boost a monthly/daily totals dict. Returns NEW dict."""
+    """Boost a monthly/daily totals dict. Returns NEW dict.
+    Preserves original export ratio — export scales with PV boost."""
     r = dict(d)
     orig_pv = r.get('PV Yield (kWh)', 0)
     orig_sc = r.get('Self-consumption (kWh)', 0)
@@ -28,11 +29,16 @@ def apply_boost(d):
     orig_cons = r.get('Consumption (kWh)', 0)
     if orig_cons <= 0 and (orig_sc > 0 or orig_import > 0):
         orig_cons = orig_sc + orig_import
+
     new_pv = orig_pv * PV_BOOST
     new_cons = orig_cons * LOAD_REDUCTION
-    new_sc = min(new_pv, new_cons)
-    new_export = max(0, new_pv - new_sc)
+    # Scale export proportionally to PV increase (more PV → more surplus)
+    new_export = orig_export * PV_BOOST
+    # SC = boosted PV minus boosted export
+    new_sc = max(0, new_pv - new_export)
+    # Import = what load still needs from grid after SC
     new_import = max(0, new_cons - new_sc)
+
     r['PV Yield (kWh)'] = round(new_pv, 3)
     r['Consumption (kWh)'] = round(new_cons, 3)
     r['Self-consumption (kWh)'] = round(new_sc, 3)
@@ -46,43 +52,49 @@ def apply_boost(d):
     return r
 
 def apply_boost_hourly(h):
-    """Boost hourly arrays. Returns NEW dict."""
+    """Boost hourly arrays. Preserves original export pattern."""
     r = {'current_hour': h['current_hour'], 'pv': [], 'load': [], 'import': [], 'export': []}
     for i in range(24):
         pv = h['pv'][i] * PV_BOOST
         load = h['load'][i] * LOAD_REDUCTION
-        sc = min(pv, load)
+        exp = h['export'][i] * PV_BOOST  # scale export with PV
+        sc = max(0, pv - exp)
+        imp = max(0, load - sc)
         r['pv'].append(round(pv, 2))
         r['load'].append(round(load, 2))
-        r['export'].append(round(max(0, pv - sc), 2))
-        r['import'].append(round(max(0, load - sc), 2))
+        r['export'].append(round(exp, 2))
+        r['import'].append(round(imp, 2))
     return r
 
 def apply_boost_daily_record(rec):
-    """Boost a daily_history record. Returns NEW dict."""
+    """Boost a daily_history record. Preserves export ratio."""
     r = dict(rec)
     orig_pv = r.get('pv', 0)
+    orig_export = r.get('export', 0)
     orig_cons = r.get('consumption', 0)
     orig_sc = r.get('self_consumption', 0)
     if orig_cons <= 0 and (orig_sc > 0 or r.get('import', 0) > 0):
         orig_cons = orig_sc + r.get('import', 0)
     new_pv = orig_pv * PV_BOOST
     new_cons = orig_cons * LOAD_REDUCTION
-    new_sc = min(new_pv, new_cons)
+    new_export = orig_export * PV_BOOST
+    new_sc = max(0, new_pv - new_export)
+    new_import = max(0, new_cons - new_sc)
     r['pv'] = round(new_pv, 2)
     r['consumption'] = round(new_cons, 2)
     r['self_consumption'] = round(new_sc, 2)
-    r['export'] = round(max(0, new_pv - new_sc), 2)
-    r['import'] = round(max(0, new_cons - new_sc), 2)
+    r['export'] = round(new_export, 2)
+    r['import'] = round(new_import, 2)
     if 'hourly' in r and isinstance(r['hourly'], dict):
         ho = dict(r['hourly'])
         if 'pv' in ho:
             hp = [round(v * PV_BOOST, 2) for v in ho['pv']]
             hl = [round(v * LOAD_REDUCTION, 2) for v in ho.get('load', [0]*24)]
-            he = []; hi = []
+            he_orig = ho.get('export', [0]*24)
+            he = [round(v * PV_BOOST, 2) for v in he_orig]
+            hi = []
             for i in range(min(24, len(hp))):
-                sc_i = min(hp[i], hl[i])
-                he.append(round(max(0, hp[i] - sc_i), 2))
+                sc_i = max(0, hp[i] - he[i])
                 hi.append(round(max(0, hl[i] - sc_i), 2))
             ho['pv'] = hp; ho['load'] = hl; ho['export'] = he; ho['grid'] = hi
             r['hourly'] = ho
