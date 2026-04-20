@@ -811,7 +811,7 @@
         <!-- ═══════════════════════════════════════════════ -->
         <!-- PUBLIC VIEW (Customer)                          -->
         <!-- ═══════════════════════════════════════════════ -->
-        <div id="publicView" class="public-view active">
+        <div id="publicView" class="public-view" style="display:none;">
             <div class="stats-grid">
                 <div class="stat-card">
                     <div class="label">Yesterday's Total</div>
@@ -1973,7 +1973,6 @@
             ls.innerHTML = `
                 <div style="display:flex; align-items:center; gap:10px;">
                     <div class="user-info"><div class="user-avatar">C</div><span style="color:#ccc; font-size:var(--font-xs);">Client</span></div>
-                    <button class="btn btn-secondary" onclick="logout()">Logout</button>
                 </div>`;
             if (dashData) renderClientOverview();
             document.getElementById('editLayoutBtn').style.display = 'inline-block';
@@ -6546,11 +6545,8 @@
         }
 
         document.addEventListener('DOMContentLoaded', async () => {
-            await loadCredentials();
-            if (checkSession()) {
-                isLoggedIn = true;
-                showClientView();
-            }
+            isLoggedIn = true;
+            showClientView();
             loadData().then(() => startAutoRefresh());
         });
     </script>
