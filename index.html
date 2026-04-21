@@ -3241,9 +3241,33 @@
             const maxH = isPartial ? partialHour : 23;
             for (let h = 0; h <= maxH; h++) expPV += monthlyAvg[h] || 0;
 
-            // Expected load & grid from monthly averages
-            const avgL = dashData.hourly?.avg_load || [];
-            const avgG = dashData.hourly?.avg_grid || [];
+            // Expected load & grid — use averages from the same month as the viewed day
+            const viewMonth = dateStr.substring(0, 7); // YYYY-MM
+            const currentMonth = new Date().getFullYear() + '-' + String(new Date().getMonth()+1).padStart(2,'0');
+            let avgL, avgG;
+            if (viewMonth === currentMonth) {
+                // Current month: use pipeline averages
+                avgL = dashData.hourly?.avg_load || [];
+                avgG = dashData.hourly?.avg_grid || [];
+            } else {
+                // Past month: compute averages from dailyHist for that month
+                avgL = new Array(24).fill(0); avgG = new Array(24).fill(0);
+                let dayCount = 0;
+                if (dailyHist) {
+                    Object.keys(dailyHist).forEach(ds => {
+                        if (ds.startsWith(viewMonth) && dailyHist[ds].hourly) {
+                            const hr = dailyHist[ds].hourly;
+                            if (hr.load) { for (let h=0;h<24;h++) avgL[h] += hr.load[h]||0; }
+                            if (hr.grid) { for (let h=0;h<24;h++) avgG[h] += hr.grid[h]||0; }
+                            dayCount++;
+                        }
+                    });
+                    if (dayCount > 0) {
+                        avgL = avgL.map(v => Math.round(v / dayCount * 100) / 100);
+                        avgG = avgG.map(v => Math.round(v / dayCount * 100) / 100);
+                    }
+                }
+            }
             let expLoad = 0, expGrid = 0;
             for (let h = 0; h <= maxH; h++) { expLoad += avgL[h] || 0; expGrid += avgG[h] || 0; }
 
@@ -3414,6 +3438,32 @@
             const mmdd = String(dp.getMonth()+1).padStart(2,'0') + '-' + String(dp.getDate()).padStart(2,'0');
             const pvsDay = getPvsystDay(mmdd);
 
+            // Compute expected load/grid lines from same month's dailyHist
+            const chartViewMonth = dateStr.substring(0, 7);
+            const chartCurrentMonth = new Date().getFullYear() + '-' + String(new Date().getMonth()+1).padStart(2,'0');
+            let expLoadLine, expGridLine;
+            if (chartViewMonth === chartCurrentMonth) {
+                expLoadLine = dashData.hourly?.avg_load || new Array(24).fill(0);
+                expGridLine = dashData.hourly?.avg_grid || new Array(24).fill(0);
+            } else {
+                expLoadLine = new Array(24).fill(0); expGridLine = new Array(24).fill(0);
+                let dcnt = 0;
+                if (dailyHist) {
+                    Object.keys(dailyHist).forEach(ds => {
+                        if (ds.startsWith(chartViewMonth) && dailyHist[ds].hourly) {
+                            const hr = dailyHist[ds].hourly;
+                            if (hr.load) { for (let i=0;i<24;i++) expLoadLine[i] += hr.load[i]||0; }
+                            if (hr.grid) { for (let i=0;i<24;i++) expGridLine[i] += hr.grid[i]||0; }
+                            dcnt++;
+                        }
+                    });
+                    if (dcnt > 0) {
+                        expLoadLine = expLoadLine.map(v => Math.round(v/dcnt*100)/100);
+                        expGridLine = expGridLine.map(v => Math.round(v/dcnt*100)/100);
+                    }
+                }
+            }
+
             // If no hourly arrays, distribute daily totals using PVSyst pattern
             let pvH, loadH, gridH;
             if (h.pv && h.pv.length === 24 && h.pv.some(v => v > 0)) {
@@ -3426,24 +3476,21 @@
                 const pvsTotal = pvsDay.reduce((a,b)=>a+b,0) || 1;
                 pvH = pvsDay.map(v => pvTotal * (v / pvsTotal));
 
-                // Distribute load/grid using avg hourly pattern
-                const avgL = dashData.hourly?.avg_load || new Array(24).fill(1);
-                const avgG = dashData.hourly?.avg_grid || new Array(24).fill(1);
-                const lTotal = avgL.reduce((a,b)=>a+b,0) || 1;
-                const gTotal = avgG.reduce((a,b)=>a+b,0) || 1;
+                // Distribute load/grid using avg hourly pattern from correct month
+                const distAvgL = expLoadLine.some(v=>v>0) ? expLoadLine : new Array(24).fill(1);
+                const distAvgG = expGridLine.some(v=>v>0) ? expGridLine : new Array(24).fill(1);
+                const lTotal = distAvgL.reduce((a,b)=>a+b,0) || 1;
+                const gTotal = distAvgG.reduce((a,b)=>a+b,0) || 1;
                 const consTotal = rec.consumption || 0;
                 const impTotal = rec.import || 0;
-                loadH = avgL.map(v => consTotal * (v / lTotal));
-                gridH = avgG.map(v => impTotal * (v / gTotal));
+                loadH = distAvgL.map(v => consTotal * (v / lTotal));
+                gridH = distAvgG.map(v => impTotal * (v / gTotal));
             }
 
             // Irradiation shifted 1hr left
             const irradRaw = irradData?.daily_records?.[dateStr]?.hourly_wm2 || new Array(24).fill(0);
             const irradH = new Array(24).fill(0);
             for (let i = 0; i < 23; i++) irradH[i] = irradRaw[i + 1] || 0;
-
-            const expLoadLine = dashData.hourly?.avg_load || new Array(24).fill(0);
-            const expGridLine = dashData.hourly?.avg_grid || new Array(24).fill(0);
 
             if (dailyChart) dailyChart.destroy();
 
@@ -3621,7 +3668,7 @@
             const upToDay = numDays;
             const expPV = calcMonthExpFor(yr, mo, upToDay, upToHour);
 
-            // Expected load/grid from MTD avg × days or proportional estimate
+            // Expected load/grid from daily history averages for the specific month
             const avgL = dashData.hourly?.avg_load || [];
             const avgG = dashData.hourly?.avg_grid || [];
             let expLoad = 0, expGrid = 0;
@@ -3629,7 +3676,32 @@
                 const dailyL = avgL.reduce((a,b)=>a+b,0);
                 const dailyG = avgG.reduce((a,b)=>a+b,0);
                 expLoad = dailyL * numDays; expGrid = dailyG * numDays;
-            } else { expLoad = actLoad || expPV * CC.hist_load_fallback; expGrid = actGrid || expLoad - expPV; }
+            } else {
+                // Historical month: compute average daily load/grid from dailyHist for that month
+                const mm2 = String(mo).padStart(2,'0');
+                let loadDays = 0, loadTotal = 0, gridDays = 0, gridTotal = 0;
+                if (dailyHist) {
+                    Object.keys(dailyHist).forEach(ds => {
+                        if (ds.startsWith(yr + '-' + mm2)) {
+                            const rec = dailyHist[ds];
+                            if (rec.consumption > 0) { loadTotal += rec.consumption; loadDays++; }
+                            const dayGrid = rec['import'] || rec.grid || 0;
+                            if (dayGrid > 0 || rec.consumption > 0) { gridTotal += dayGrid; gridDays++; }
+                        }
+                    });
+                }
+                if (loadDays > 0) {
+                    // Average daily load × full month days
+                    const avgDailyLoad = loadTotal / loadDays;
+                    const avgDailyGrid = gridTotal / gridDays;
+                    expLoad = avgDailyLoad * daysInMonth;
+                    expGrid = avgDailyGrid * daysInMonth;
+                } else {
+                    // No daily history — use PVSyst-based estimate
+                    expLoad = expPV * CC.hist_load_fallback;
+                    expGrid = Math.max(0, expLoad - expPV);
+                }
+            }
 
             // Render slabs
             renderMonthlySlab('load', actLoad, expLoad, true);
